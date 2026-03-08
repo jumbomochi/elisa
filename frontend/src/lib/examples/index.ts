@@ -6,6 +6,8 @@ import { teamBuild } from './teamBuild';
 import { spaceDodge } from './spaceDodge';
 import { skillShowcase } from './skillShowcase';
 import { rulesShowcase } from './rulesShowcase';
+import { jokeMachine } from './jokeMachine';
+import { petNamePicker } from './petNamePicker';
 
 export interface ExampleNugget {
   id: string;
@@ -29,4 +31,6 @@ export const EXAMPLE_NUGGETS: ExampleNugget[] = [
   spaceDodge,
   skillShowcase,
   rulesShowcase,
+  jokeMachine,
+  petNamePicker,
 ];
