@@ -17,7 +17,7 @@ import { PermissionPolicy } from '../permissionPolicy.js';
 import { ContextManager } from '../../utils/contextManager.js';
 import { TokenTracker, DEFAULT_RESERVED_PER_TASK } from '../../utils/tokenTracker.js';
 import { TaskDAG } from '../../utils/dag.js';
-import { DEFAULT_MODEL, MAX_CONCURRENT_TASKS, PREDECESSOR_WORD_CAP as PRED_WORD_CAP, MAX_TURNS_DEFAULT, MAX_TURNS_RETRY_INCREMENT } from '../../utils/constants.js';
+import { MAX_CONCURRENT_TASKS, PREDECESSOR_WORD_CAP as PRED_WORD_CAP, MAX_TURNS_DEFAULT, MAX_TURNS_RETRY_INCREMENT } from '../../utils/constants.js';
 
 interface PromptModule {
   SYSTEM_PROMPT: string;
@@ -397,7 +397,7 @@ export class ExecutePhase {
         onOutput: this.makeOutputHandler(ctx, agentName),
         onQuestion: this.makeQuestionHandler(ctx, taskId),
         workingDir: ctx.nuggetDir,
-        model: process.env.CLAUDE_MODEL || DEFAULT_MODEL,
+        model: undefined, // uses getCodeModel() default in agentRunner
         maxTurns,
         allowedTools: [
           'Read', 'Write', 'Edit', 'MultiEdit',

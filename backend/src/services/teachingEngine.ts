@@ -1,13 +1,13 @@
 /** Generates kid-friendly explanations of engineering concepts. */
 
-import Anthropic from '@anthropic-ai/sdk';
 import {
   getCurriculumMoment,
   TEACHING_SYSTEM_PROMPT,
   teachingUserPrompt,
   type TeachingMomentData,
 } from '../prompts/teaching.js';
-import { getAnthropicClient } from '../utils/anthropicClient.js';
+import { getLLMProvider } from '../providers/index.js';
+import { getChatModel } from '../providers/models.js';
 
 const TRIGGER_MAP: Record<string, [string, string]> = {
   plan_ready: ['decomposition', 'task_breakdown'],
@@ -31,7 +31,6 @@ const TRIGGER_MAP: Record<string, [string, string]> = {
 export class TeachingEngine {
   private shownConcepts = new Set<string>();
   private commitCount = 0;
-  private client: Anthropic | null = null;
 
   async getMoment(
     eventType: string,
@@ -85,23 +84,21 @@ export class TeachingEngine {
     eventDetails: string,
     nuggetType: string,
   ): Promise<TeachingMomentData | null> {
-    if (!this.client) {
-      this.client = getAnthropicClient();
-    }
-
     const prompt = teachingUserPrompt(eventType, eventDetails, nuggetType || 'software');
+    const model = getChatModel();
 
-    // Use a cheap model for small teaching JSON -- no need for Opus here
-    const response = await this.client.messages.create({
-      model: 'claude-haiku-4-20250414',
-      max_tokens: 300,
-      system: TEACHING_SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: prompt }],
+    const provider = getLLMProvider();
+    const response = await provider.chat({
+      model,
+      messages: [
+        { role: 'system', content: TEACHING_SYSTEM_PROMPT },
+        { role: 'user', content: prompt },
+      ],
+      maxTokens: 300,
     });
 
-    const text = response.content[0].type === 'text' ? response.content[0].text : '';
     try {
-      return JSON.parse(text) as TeachingMomentData;
+      return JSON.parse(response.text) as TeachingMomentData;
     } catch {
       return null;
     }

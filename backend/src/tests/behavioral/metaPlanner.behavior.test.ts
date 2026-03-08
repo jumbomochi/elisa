@@ -2,29 +2,35 @@
  *
  * Tests JSON parse retry flow, validate() edge cases (circular deps,
  * missing agents, bad task refs, path filtering, persona cap).
- * The Anthropic SDK is mocked; MetaPlanner's own logic runs for real.
+ * The LLM provider is mocked; MetaPlanner's own logic runs for real.
  */
 
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 // -- Module mock (hoisted) --
 
-const mockCreate = vi.fn();
+const mockChat = vi.fn();
 
-vi.mock('@anthropic-ai/sdk', () => {
-  class MockAnthropic {
-    messages = { create: mockCreate };
-  }
-  return { default: MockAnthropic };
-});
+vi.mock('../../providers/index.js', () => ({
+  getLLMProvider: () => ({
+    name: 'anthropic',
+    chat: mockChat,
+  }),
+}));
+
+vi.mock('../../providers/models.js', () => ({
+  getCodeModel: () => 'claude-opus-4-6',
+}));
 
 import { MetaPlanner } from '../../services/metaPlanner.js';
 
 // -- Helpers --
 
-function makeTextResponse(text: string) {
+function makeChatResponse(text: string) {
   return {
-    content: [{ type: 'text', text }],
+    text,
+    inputTokens: 100,
+    outputTokens: 50,
   };
 }
 
@@ -58,7 +64,7 @@ function makeValidPlan(overrides: Partial<Record<string, any>> = {}) {
 function configureValidResponse(plan?: Record<string, any>) {
   const p = plan ?? makeValidPlan();
   const json = JSON.stringify(p);
-  mockCreate.mockResolvedValueOnce(makeTextResponse(json));
+  mockChat.mockResolvedValueOnce(makeChatResponse(json));
 }
 
 // -- Setup --
@@ -92,9 +98,9 @@ describe('successful planning', () => {
     await planner.plan({ nugget: { goal: 'test', type: 'software' } });
 
     // The mock receives the call -- verify the spec was augmented with agents
-    const callArgs = mockCreate.mock.calls[0][0];
-    const userContent = callArgs.messages[0].content;
-    expect(userContent).toContain('"agents"');
+    const callArgs = mockChat.mock.calls[0][0];
+    const userMessage = callArgs.messages.find((m: any) => m.role === 'user');
+    expect(userMessage.content).toContain('"agents"');
   });
 
   it('does not use assistant prefill (required for Opus model compatibility)', async () => {
@@ -103,9 +109,9 @@ describe('successful planning', () => {
 
     await planner.plan({ nugget: { goal: 'test', type: 'software' } });
 
-    const callArgs = mockCreate.mock.calls[0][0];
-    const messages = callArgs.messages;
-    // All messages must be user role -- no assistant prefill
+    const callArgs = mockChat.mock.calls[0][0];
+    const messages = callArgs.messages.filter((m: any) => m.role !== 'system');
+    // All non-system messages must be user role -- no assistant prefill
     for (const msg of messages) {
       expect(msg.role).toBe('user');
     }
@@ -124,14 +130,14 @@ describe('JSON parse retry', () => {
     const plan = makeValidPlan();
 
     // First call returns invalid JSON
-    mockCreate.mockResolvedValueOnce(makeTextResponse('not valid json at all'));
+    mockChat.mockResolvedValueOnce(makeChatResponse('not valid json at all'));
 
     // Retry call returns valid JSON
-    mockCreate.mockResolvedValueOnce(makeTextResponse(JSON.stringify(plan)));
+    mockChat.mockResolvedValueOnce(makeChatResponse(JSON.stringify(plan)));
 
     const result = await planner.plan({ nugget: { goal: 'test', type: 'software' } });
 
-    expect(mockCreate).toHaveBeenCalledTimes(2);
+    expect(mockChat).toHaveBeenCalledTimes(2);
     expect(result.tasks).toHaveLength(1);
   });
 
@@ -139,9 +145,9 @@ describe('JSON parse retry', () => {
     const planner = new MetaPlanner();
 
     // First call: invalid JSON
-    mockCreate.mockResolvedValueOnce(makeTextResponse('garbage'));
+    mockChat.mockResolvedValueOnce(makeChatResponse('garbage'));
     // Retry: also invalid JSON
-    mockCreate.mockResolvedValueOnce(makeTextResponse('still garbage'));
+    mockChat.mockResolvedValueOnce(makeChatResponse('still garbage'));
 
     await expect(planner.plan({ nugget: { goal: 'test', type: 'software' } }))
       .rejects.toThrow('Meta-planner failed to produce valid JSON after retry');
@@ -153,8 +159,8 @@ describe('JSON parse retry', () => {
     const json = JSON.stringify(plan);
 
     // parseJson strips fences first, extracting the JSON inside.
-    mockCreate.mockResolvedValueOnce(
-      makeTextResponse('```json\n' + json + '\n```'),
+    mockChat.mockResolvedValueOnce(
+      makeChatResponse('```json\n' + json + '\n```'),
     );
 
     const result = await planner.plan({ nugget: { goal: 'test', type: 'software' } });
@@ -171,7 +177,7 @@ describe('validate() edge cases', () => {
     const planner = new MetaPlanner();
     const badPlan = { agents: [{ name: 'Bot', role: 'builder', persona: '' }] };
     const json = JSON.stringify(badPlan);
-    mockCreate.mockResolvedValueOnce(makeTextResponse(json));
+    mockChat.mockResolvedValueOnce(makeChatResponse(json));
 
     await expect(planner.plan({ nugget: { goal: 'test', type: 'software' } }))
       .rejects.toThrow("'tasks'");
@@ -183,7 +189,7 @@ describe('validate() edge cases', () => {
       tasks: [{ id: 't1', name: 'X', description: '', dependencies: [], acceptance_criteria: [] }],
     };
     const json = JSON.stringify(badPlan);
-    mockCreate.mockResolvedValueOnce(makeTextResponse(json));
+    mockChat.mockResolvedValueOnce(makeChatResponse(json));
 
     await expect(planner.plan({ nugget: { goal: 'test', type: 'software' } }))
       .rejects.toThrow("'agents'");
@@ -193,7 +199,7 @@ describe('validate() edge cases', () => {
     const planner = new MetaPlanner();
     const badPlan = { tasks: [], agents: [{ name: 'Bot', role: 'builder', persona: '' }] };
     const json = JSON.stringify(badPlan);
-    mockCreate.mockResolvedValueOnce(makeTextResponse(json));
+    mockChat.mockResolvedValueOnce(makeChatResponse(json));
 
     await expect(planner.plan({ nugget: { goal: 'test', type: 'software' } }))
       .rejects.toThrow('at least one task');
@@ -214,7 +220,7 @@ describe('validate() edge cases', () => {
       ],
     });
     const json = JSON.stringify(plan);
-    mockCreate.mockResolvedValueOnce(makeTextResponse(json));
+    mockChat.mockResolvedValueOnce(makeChatResponse(json));
 
     await expect(planner.plan({ nugget: { goal: 'test', type: 'software' } }))
       .rejects.toThrow('unknown task task-999');
@@ -235,7 +241,7 @@ describe('validate() edge cases', () => {
       ],
     });
     const json = JSON.stringify(plan);
-    mockCreate.mockResolvedValueOnce(makeTextResponse(json));
+    mockChat.mockResolvedValueOnce(makeChatResponse(json));
 
     await expect(planner.plan({ nugget: { goal: 'test', type: 'software' } }))
       .rejects.toThrow('unknown agent Ghost Bot');
@@ -249,7 +255,7 @@ describe('validate() edge cases', () => {
       ],
     });
     const json = JSON.stringify(plan);
-    mockCreate.mockResolvedValueOnce(makeTextResponse(json));
+    mockChat.mockResolvedValueOnce(makeChatResponse(json));
 
     await expect(planner.plan({ nugget: { goal: 'test', type: 'software' } }))
       .rejects.toThrow("missing 'id'");
@@ -263,7 +269,7 @@ describe('validate() edge cases', () => {
       ],
     });
     const json = JSON.stringify(plan);
-    mockCreate.mockResolvedValueOnce(makeTextResponse(json));
+    mockChat.mockResolvedValueOnce(makeChatResponse(json));
 
     await expect(planner.plan({ nugget: { goal: 'test', type: 'software' } }))
       .rejects.toThrow("missing 'dependencies'");
@@ -383,17 +389,20 @@ describe('validate() edge cases', () => {
 // ============================================================
 
 describe('API error handling', () => {
-  it('throws when API returns no text content', async () => {
+  it('treats empty text as parse failure and retries', async () => {
     const planner = new MetaPlanner();
-    mockCreate.mockResolvedValueOnce({ content: [] });
+    // First call returns empty text
+    mockChat.mockResolvedValueOnce(makeChatResponse(''));
+    // Retry also fails
+    mockChat.mockResolvedValueOnce(makeChatResponse(''));
 
     await expect(planner.plan({ nugget: { goal: 'test', type: 'software' } }))
-      .rejects.toThrow('No text content');
+      .rejects.toThrow('Meta-planner failed to produce valid JSON after retry');
   });
 
   it('propagates API errors', async () => {
     const planner = new MetaPlanner();
-    mockCreate.mockRejectedValueOnce(new Error('Rate limit exceeded'));
+    mockChat.mockRejectedValueOnce(new Error('Rate limit exceeded'));
 
     await expect(planner.plan({ nugget: { goal: 'test', type: 'software' } }))
       .rejects.toThrow('Rate limit exceeded');

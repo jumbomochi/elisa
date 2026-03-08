@@ -8,6 +8,10 @@ interface ReadinessBadgeProps {
 function friendlyMessage(health: HealthStatus): string {
   if (health.status === 'ready') return 'Ready to build!';
   if (health.status === 'offline') return 'Elisa can\'t find the backend server.';
+  if (health.provider === 'ollama') {
+    if (health.apiKey === 'missing') return 'Can\'t reach Ollama. Is it running? Try: ollama serve';
+    if (health.apiKey === 'invalid') return 'Ollama is running but has no models. Try: ollama pull qwen2.5-coder:14b';
+  }
   if (health.apiKey === 'missing') return 'No API key found. Ask your parent to add one!';
   if (health.apiKey === 'invalid') return 'That API key didn\'t work. Ask your parent to check it!';
   if (health.agentSdk === 'not_found') return 'Agent SDK not installed. Try running npm install.';
@@ -46,14 +50,16 @@ export default function ReadinessBadge({ health, loading }: ReadinessBadgeProps)
   }
 
   // degraded -- show the friendly message directly, not just "Not Ready"
+  const degradedLabel = health.provider === 'ollama'
+    ? (health.apiKey === 'missing' ? 'Ollama Offline' : 'No Models')
+    : (health.apiKey === 'missing' || health.apiKey === 'invalid' ? 'Needs API Key' : 'Not Ready');
+
   return (
     <span
       className="text-xs px-2.5 py-1 rounded-full bg-accent-gold/15 text-accent-gold font-medium"
       title={friendlyMessage(health)}
     >
-      {health.apiKey === 'missing' || health.apiKey === 'invalid'
-        ? 'Needs API Key'
-        : 'Not Ready'}
+      {degradedLabel}
     </span>
   );
 }

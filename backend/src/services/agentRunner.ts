@@ -1,14 +1,14 @@
-/** Runs individual AI agents via the Claude Agent SDK.
+/** Runs individual AI agents via the configured LLM provider.
  *
- * Uses the SDK's query() API to run agents programmatically. This eliminates
- * all subprocess/shell issues (Windows .cmd wrappers, ENOENT, etc.) and
- * provides native streaming, tool control, and permission management.
+ * Delegates to the active provider (Anthropic Claude Agent SDK or Ollama
+ * custom tool-calling loop) for agentic execution.
  */
 
-import { query } from '@anthropic-ai/claude-agent-sdk';
 import type { AgentResult } from '../models/session.js';
 import { withTimeout } from '../utils/withTimeout.js';
 import { MAX_TURNS_DEFAULT } from '../utils/constants.js';
+import { getLLMProvider } from '../providers/index.js';
+import { getCodeModel } from '../providers/models.js';
 
 export interface AgentRunnerParams {
   taskId: string;
@@ -37,19 +37,11 @@ export class AgentRunner {
       onOutput,
       workingDir,
       timeout = 300,
-      model = process.env.CLAUDE_MODEL || 'claude-opus-4-6',
+      model = getCodeModel(),
       maxTurns = MAX_TURNS_DEFAULT,
       mcpServers,
       allowedTools,
     } = params;
-
-    const mcpConfig = mcpServers?.length
-      ? Object.fromEntries(mcpServers.map(s => [s.name, {
-          command: s.command,
-          ...(s.args ? { args: s.args } : {}),
-          ...(s.env ? { env: s.env } : {}),
-        }]))
-      : undefined;
 
     const abortController = new AbortController();
 
@@ -62,12 +54,24 @@ export class AgentRunner {
     }
 
     try {
+      const provider = getLLMProvider();
       return await withTimeout(
-        this.runQuery(prompt, systemPrompt, workingDir, taskId, onOutput, model, maxTurns, mcpConfig, abortController, allowedTools),
+        provider.executeAgent({
+          taskId,
+          prompt,
+          systemPrompt,
+          onOutput,
+          workingDir,
+          model,
+          maxTurns,
+          mcpServers,
+          allowedTools,
+          abortController,
+        }),
         timeout * 1000,
       );
     } catch (err: any) {
-      // Ensure the query is aborted on timeout or any error
+      // Ensure the agent is aborted on timeout or any error
       abortController.abort();
       if (err.message === 'Timed out') {
         return {
@@ -87,70 +91,4 @@ export class AgentRunner {
       };
     }
   }
-
-  private async runQuery(
-    prompt: string,
-    systemPrompt: string,
-    cwd: string,
-    taskId: string,
-    onOutput: (taskId: string, content: string) => Promise<void>,
-    model: string,
-    maxTurns: number,
-    mcpConfig?: Record<string, any>,
-    abortController?: AbortController,
-    allowedTools?: string[],
-  ): Promise<AgentResult> {
-    const conversation = query({
-      prompt,
-      options: {
-        cwd,
-        model,
-        maxTurns,
-        permissionMode: 'bypassPermissions',
-        systemPrompt,
-        ...(allowedTools ? { allowedTools } : {}),
-        ...(mcpConfig ? { mcpServers: mcpConfig } : {}),
-        ...(abortController ? { abortController } : {}),
-      },
-    });
-
-    let costUsd = 0;
-    let inputTokens = 0;
-    let outputTokens = 0;
-    let finalResult = '';
-    let success = true;
-    const accumulatedText: string[] = [];
-
-    for await (const message of conversation) {
-      if (message.type === 'assistant') {
-        for (const block of (message as any).message?.content ?? []) {
-          if (block.type === 'text') {
-            accumulatedText.push(block.text);
-            onOutput(taskId, block.text).catch(() => {});
-          }
-        }
-      }
-
-      if (message.type === 'result') {
-        const result = message as any;
-        costUsd = result.total_cost_usd ?? 0;
-        inputTokens = result.usage?.input_tokens ?? 0;
-        outputTokens = result.usage?.output_tokens ?? 0;
-
-        if (result.subtype === 'success') {
-          finalResult = result.result ?? '';
-        } else {
-          success = false;
-          const errors: string[] = result.errors ?? [];
-          finalResult = errors.join('; ')
-            || accumulatedText.slice(-3).join('\n')
-            || 'Unknown error';
-        }
-      }
-    }
-
-    const summary = finalResult || accumulatedText.slice(-3).join('\n') || 'No output';
-    return { success, summary, costUsd, inputTokens, outputTokens };
-  }
 }
-

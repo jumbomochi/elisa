@@ -1,14 +1,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-const createMock = vi.fn();
+const chatMock = vi.fn();
 
-vi.mock('@anthropic-ai/sdk', () => {
-  return {
-    default: class MockAnthropic {
-      messages = { create: createMock };
-    },
-  };
-});
+vi.mock('../../providers/index.js', () => ({
+  getLLMProvider: () => ({
+    name: 'anthropic',
+    chat: chatMock,
+  }),
+}));
+
+vi.mock('../../providers/models.js', () => ({
+  getChatModel: () => 'claude-haiku-4-5-20241022',
+}));
 
 // Import after mock is set up
 const { NarratorService } = await import('../narratorService.js');
@@ -16,7 +19,7 @@ const { NarratorService } = await import('../narratorService.js');
 describe('NarratorService', () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    createMock.mockReset();
+    chatMock.mockReset();
   });
 
   afterEach(() => {
@@ -24,8 +27,10 @@ describe('NarratorService', () => {
   });
 
   function mockApiResponse(text: string) {
-    createMock.mockResolvedValue({
-      content: [{ type: 'text', text }],
+    chatMock.mockResolvedValue({
+      text,
+      inputTokens: 0,
+      outputTokens: 0,
     });
   }
 
@@ -40,23 +45,23 @@ describe('NarratorService', () => {
     });
 
     it('returns fallback on timeout', async () => {
-      createMock.mockRejectedValue(new Error('AbortError'));
+      chatMock.mockRejectedValue(new Error('AbortError'));
 
       const service = new NarratorService();
       const msg = await service.translate('task_started', 'Builder Bot', 'Scaffold HTML', 'Build a game');
 
-      expect(msg.text).toBe('Builder Bot is getting to work!');
-      expect(msg.mood).toBe('excited');
+      expect(msg!.text).toBe('Builder Bot is getting to work!');
+      expect(msg!.mood).toBe('excited');
     });
 
     it('returns fallback on API error', async () => {
-      createMock.mockRejectedValue(new Error('API rate limit'));
+      chatMock.mockRejectedValue(new Error('API rate limit'));
 
       const service = new NarratorService();
       const msg = await service.translate('task_failed', 'Test Bot', 'Tests failed', 'Build a game');
 
-      expect(msg.text).toContain('Test Bot');
-      expect(msg.mood).toBe('concerned');
+      expect(msg!.text).toContain('Test Bot');
+      expect(msg!.mood).toBe('concerned');
     });
   });
 
@@ -64,38 +69,38 @@ describe('NarratorService', () => {
     let service: InstanceType<typeof NarratorService>;
 
     beforeEach(() => {
-      createMock.mockRejectedValue(new Error('API error'));
+      chatMock.mockRejectedValue(new Error('API error'));
       service = new NarratorService();
     });
 
     it('task_started -> excited', async () => {
       const msg = await service.translate('task_started', 'Bot', '', '');
-      expect(msg.mood).toBe('excited');
+      expect(msg!.mood).toBe('excited');
     });
 
     it('task_completed -> celebrating', async () => {
       const msg = await service.translate('task_completed', 'Bot', '', '');
-      expect(msg.mood).toBe('celebrating');
+      expect(msg!.mood).toBe('celebrating');
     });
 
     it('task_failed -> concerned', async () => {
       const msg = await service.translate('task_failed', 'Bot', '', '');
-      expect(msg.mood).toBe('concerned');
+      expect(msg!.mood).toBe('concerned');
     });
 
     it('session_complete -> celebrating', async () => {
       const msg = await service.translate('session_complete', 'Bot', '', '');
-      expect(msg.mood).toBe('celebrating');
+      expect(msg!.mood).toBe('celebrating');
     });
 
     it('error -> concerned', async () => {
       const msg = await service.translate('error', 'Bot', '', '');
-      expect(msg.mood).toBe('concerned');
+      expect(msg!.mood).toBe('concerned');
     });
 
     it('unknown event -> encouraging', async () => {
       const msg = await service.translate('agent_output', 'Bot', '', '');
-      expect(msg.mood).toBe('encouraging');
+      expect(msg!.mood).toBe('encouraging');
     });
   });
 
@@ -199,7 +204,7 @@ describe('NarratorService', () => {
     });
 
     it('resets fallback index so rotation restarts', async () => {
-      createMock.mockRejectedValue(new Error('API error'));
+      chatMock.mockRejectedValue(new Error('API error'));
 
       const service = new NarratorService();
       const first = await service.translate('task_started', 'Bot', '', '');
@@ -362,7 +367,7 @@ describe('NarratorService', () => {
 
   describe('fallback rotation', () => {
     it('adds fallback messages to history', async () => {
-      createMock.mockRejectedValue(new Error('API error'));
+      chatMock.mockRejectedValue(new Error('API error'));
 
       const service = new NarratorService();
       await service.translate('task_started', 'Bot', '', '');
@@ -372,7 +377,7 @@ describe('NarratorService', () => {
     });
 
     it('rotates fallback messages on consecutive calls', async () => {
-      createMock.mockRejectedValue(new Error('API error'));
+      chatMock.mockRejectedValue(new Error('API error'));
 
       const service = new NarratorService();
       const msg1 = await service.translate('task_started', 'Bot', '', '');
@@ -432,8 +437,8 @@ describe('NarratorService', () => {
 
       const service = new NarratorService();
       const msg = await service.translate('task_completed', 'Bot', '', '');
-      expect(msg.text).toBe('Hello!');
-      expect(msg.mood).toBe('celebrating');
+      expect(msg!.text).toBe('Hello!');
+      expect(msg!.mood).toBe('celebrating');
     });
 
     it('uses encouraging as default mood for invalid mood values', async () => {
@@ -441,8 +446,8 @@ describe('NarratorService', () => {
 
       const service = new NarratorService();
       const msg = await service.translate('task_started', 'Bot', '', '');
-      expect(msg.text).toBe('Working on it');
-      expect(msg.mood).toBe('encouraging');
+      expect(msg!.text).toBe('Working on it');
+      expect(msg!.mood).toBe('encouraging');
     });
 
     it('falls back gracefully for non-JSON response', async () => {
@@ -450,8 +455,8 @@ describe('NarratorService', () => {
 
       const service = new NarratorService();
       const msg = await service.translate('task_started', 'Bot', '', '');
-      expect(msg.text).toBe('Builder Bot is working hard!');
-      expect(msg.mood).toBe('encouraging');
+      expect(msg!.text).toBe('Builder Bot is working hard!');
+      expect(msg!.mood).toBe('encouraging');
     });
   });
 });

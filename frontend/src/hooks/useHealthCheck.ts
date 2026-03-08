@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 
 export interface HealthStatus {
   status: 'ready' | 'degraded' | 'offline';
+  provider?: string;
   apiKey: 'valid' | 'invalid' | 'missing' | 'unchecked';
   apiKeyError?: string;
   agentSdk: 'available' | 'not_found';

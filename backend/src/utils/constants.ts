@@ -44,3 +44,20 @@ export const MAX_TURNS_DEFAULT = 25;
 
 /** Additional turns granted per retry attempt. */
 export const MAX_TURNS_RETRY_INCREMENT = 10;
+
+// -- Ollama (local model) defaults --
+
+/** Default Ollama server URL. */
+export const DEFAULT_OLLAMA_URL = 'http://localhost:11434';
+
+/** Default Ollama model for code generation / planning. */
+export const DEFAULT_OLLAMA_CODE_MODEL = 'qwen2.5-coder:14b';
+
+/** Default Ollama model for narrator / teaching (lighter). */
+export const DEFAULT_OLLAMA_CHAT_MODEL = DEFAULT_OLLAMA_CODE_MODEL;
+
+/** Max characters of tool output to include in Ollama agent loop messages. */
+export const OLLAMA_TOOL_OUTPUT_CAP = 10_000;
+
+/** Bash command timeout for Ollama tool executor in milliseconds. */
+export const OLLAMA_BASH_TIMEOUT_MS = 30_000;

@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto';
 import express from 'express';
 import { WebSocketServer, WebSocket } from 'ws';
 import http from 'node:http';
-import Anthropic from '@anthropic-ai/sdk';
+import { getLLMProvider } from './providers/index.js';
 import { HardwareService } from './services/hardwareService.js';
 import { SessionStore } from './services/sessionStore.js';
 import { createSessionRouter } from './routes/sessions.js';
@@ -26,35 +26,22 @@ interface HealthStatus {
   apiKey: 'valid' | 'invalid' | 'missing' | 'unchecked';
   apiKeyError?: string;
   agentSdk: 'available' | 'not_found';
+  provider: string;
 }
 
 const healthStatus: HealthStatus = {
   apiKey: 'unchecked',
   agentSdk: 'not_found',
+  provider: 'anthropic',
 };
 
 async function validateStartupHealth(): Promise<void> {
-  // Check Agent SDK
-  try {
-    await import('@anthropic-ai/claude-agent-sdk');
-    healthStatus.agentSdk = 'available';
-  } catch {
-    healthStatus.agentSdk = 'not_found';
-  }
-
-  // Check API key
-  if (!process.env.ANTHROPIC_API_KEY) {
-    healthStatus.apiKey = 'missing';
-    return;
-  }
-
-  try {
-    await new Anthropic().models.list({ limit: 1 });
-    healthStatus.apiKey = 'valid';
-  } catch (err: any) {
-    healthStatus.apiKey = 'invalid';
-    healthStatus.apiKeyError = err.message ?? String(err);
-  }
+  const provider = getLLMProvider();
+  healthStatus.provider = provider.name;
+  const result = await provider.healthCheck();
+  healthStatus.apiKey = result.apiKey;
+  healthStatus.agentSdk = result.agentSdk;
+  healthStatus.apiKeyError = result.error;
 }
 
 // -- WebSocket Connection Manager --
@@ -124,25 +111,31 @@ function createApp(staticDir?: string, authToken?: string) {
 
   // Health (no auth required)
   app.get('/api/health', async (_req, res) => {
-    // Live-check API key presence (env var may be set after startup via config endpoint)
-    if (!process.env.ANTHROPIC_API_KEY) {
-      healthStatus.apiKey = 'missing';
-      healthStatus.apiKeyError = undefined;
-    } else if (healthStatus.apiKey === 'missing' || healthStatus.apiKey === 'unchecked') {
-      // Key appeared since last check — validate with Anthropic API
-      try {
-        await new Anthropic().models.list({ limit: 1 });
-        healthStatus.apiKey = 'valid';
+    const provider = getLLMProvider();
+
+    // For Anthropic: live-check if env var was added or removed at runtime
+    if (provider.name === 'anthropic') {
+      if (!process.env.ANTHROPIC_API_KEY) {
+        healthStatus.apiKey = 'missing';
         healthStatus.apiKeyError = undefined;
-      } catch (err: any) {
-        healthStatus.apiKey = 'invalid';
-        healthStatus.apiKeyError = err.message ?? String(err);
+      } else if (healthStatus.apiKey === 'missing' || healthStatus.apiKey === 'unchecked') {
+        const result = await provider.healthCheck();
+        healthStatus.apiKey = result.apiKey;
+        healthStatus.agentSdk = result.agentSdk;
+        healthStatus.apiKeyError = result.error;
       }
+    } else if (healthStatus.apiKey === 'missing' || healthStatus.apiKey === 'unchecked') {
+      // For other providers (ollama): re-check if status was unchecked/missing
+      const result = await provider.healthCheck();
+      healthStatus.apiKey = result.apiKey;
+      healthStatus.agentSdk = result.agentSdk;
+      healthStatus.apiKeyError = result.error;
     }
 
     const ready = healthStatus.apiKey === 'valid' && healthStatus.agentSdk === 'available';
     res.json({
       status: ready ? 'ready' : 'degraded',
+      provider: provider.name,
       apiKey: healthStatus.apiKey,
       apiKeyError: healthStatus.apiKeyError ? 'API key validation failed' : undefined,
       agentSdk: healthStatus.agentSdk,
@@ -165,6 +158,11 @@ function createApp(staticDir?: string, authToken?: string) {
   // Dev-mode: accept API key from Electron process (which stores it encrypted)
   if (!staticDir) {
     app.post('/api/internal/config', async (req, res) => {
+      const provider = getLLMProvider();
+      if (provider.name === 'ollama') {
+        res.status(400).json({ detail: 'API key configuration not needed for Ollama provider' });
+        return;
+      }
       const { apiKey } = req.body;
       if (typeof apiKey !== 'string' || apiKey.length === 0) {
         res.status(400).json({ detail: 'apiKey is required' });
@@ -172,14 +170,9 @@ function createApp(staticDir?: string, authToken?: string) {
       }
       process.env.ANTHROPIC_API_KEY = apiKey;
       // Validate the newly-set key
-      try {
-        await new Anthropic().models.list({ limit: 1 });
-        healthStatus.apiKey = 'valid';
-        healthStatus.apiKeyError = undefined;
-      } catch (err: any) {
-        healthStatus.apiKey = 'invalid';
-        healthStatus.apiKeyError = err.message ?? String(err);
-      }
+      const result = await provider.healthCheck();
+      healthStatus.apiKey = result.apiKey;
+      healthStatus.apiKeyError = result.error;
       res.json({ apiKey: healthStatus.apiKey });
     });
   }

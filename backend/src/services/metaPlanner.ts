@@ -1,9 +1,8 @@
-/** Decomposes a nugget spec into a task DAG using Claude. */
+/** Decomposes a nugget spec into a task DAG using the configured LLM provider. */
 
-import Anthropic from '@anthropic-ai/sdk';
 import { buildMetaPlannerSystem, META_PLANNER_SYSTEM, metaPlannerUser } from '../prompts/metaPlanner.js';
-import { DEFAULT_MODEL } from '../utils/constants.js';
-import { getAnthropicClient } from '../utils/anthropicClient.js';
+import { getLLMProvider } from '../providers/index.js';
+import { getCodeModel } from '../providers/models.js';
 
 const DEFAULT_AGENTS = [
   {
@@ -24,12 +23,6 @@ const DEFAULT_AGENTS = [
 ];
 
 export class MetaPlanner {
-  private client: Anthropic;
-
-  constructor() {
-    this.client = getAnthropicClient();
-  }
-
   async plan(spec: Record<string, any>): Promise<Record<string, any>> {
     if (!spec.agents) {
       spec = { ...spec, agents: DEFAULT_AGENTS };
@@ -38,22 +31,22 @@ export class MetaPlanner {
     const specJson = JSON.stringify(spec, null, 2);
     const userMsg = metaPlannerUser(specJson);
     const systemPrompt = buildMetaPlannerSystem(spec);
+    const model = getCodeModel();
 
-    const model = process.env.CLAUDE_MODEL || DEFAULT_MODEL;
-    const response = await this.client.messages.create({
+    const provider = getLLMProvider();
+    const response = await provider.chat({
       model,
-      system: systemPrompt,
       messages: [
+        { role: 'system', content: systemPrompt },
         { role: 'user', content: userMsg },
       ],
-      max_tokens: 4096,
+      maxTokens: 4096,
     });
 
-    const text = this.extractText(response);
-    let plan = this.parseJson(text);
+    let plan = this.parseJson(response.text);
 
     if (!plan) {
-      plan = await this.retryParse(systemPrompt, userMsg, text);
+      plan = await this.retryParse(systemPrompt, userMsg, response.text);
     }
 
     this.validate(plan);
@@ -65,11 +58,12 @@ export class MetaPlanner {
     originalUserMsg: string,
     badResponse: string,
   ): Promise<Record<string, any>> {
-    const model = process.env.CLAUDE_MODEL || DEFAULT_MODEL;
-    const response = await this.client.messages.create({
+    const model = getCodeModel();
+    const provider = getLLMProvider();
+    const response = await provider.chat({
       model,
-      system: systemPrompt,
       messages: [
+        { role: 'system', content: systemPrompt },
         { role: 'user', content: originalUserMsg },
         { role: 'assistant', content: badResponse },
         {
@@ -80,22 +74,14 @@ export class MetaPlanner {
             'or commentary. Just the raw JSON.',
         },
       ],
-      max_tokens: 4096,
+      maxTokens: 4096,
     });
 
-    const text = this.extractText(response);
-    const plan = this.parseJson(text);
+    const plan = this.parseJson(response.text);
     if (!plan) {
       throw new Error('Meta-planner failed to produce valid JSON after retry');
     }
     return plan;
-  }
-
-  private extractText(response: Anthropic.Message): string {
-    for (const block of response.content) {
-      if (block.type === 'text') return block.text;
-    }
-    throw new Error('No text content in meta-planner response');
   }
 
   private parseJson(text: string): Record<string, any> | null {
