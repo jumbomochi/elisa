@@ -5,6 +5,7 @@ export const teamBuild: ExampleNugget = {
   name: 'Team Build',
   description: 'A todo app built by a full team: builder writes code, tester checks it, reviewer approves.',
   category: 'multi-agent',
+  difficulty: 2,
   color: 'bg-purple-100',
   accentColor: 'text-purple-700',
   workspace: {

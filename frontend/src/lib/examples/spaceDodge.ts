@@ -5,6 +5,7 @@ export const spaceDodge: ExampleNugget = {
   name: 'Space Dodge',
   description: 'A browser game where you dodge asteroids in space. Arrow keys to move, survive as long as you can!',
   category: 'game',
+  difficulty: 2,
   color: 'bg-amber-100',
   accentColor: 'text-amber-700',
   workspace: {

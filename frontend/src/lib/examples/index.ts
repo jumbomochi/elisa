@@ -12,6 +12,8 @@ export interface ExampleNugget {
   name: string;
   description: string;
   category: 'web' | 'hardware' | 'multi-agent' | 'game';
+  difficulty: 1 | 2 | 3;
+  previewImage?: string;
   color: string;
   accentColor: string;
   workspace: Record<string, unknown>;

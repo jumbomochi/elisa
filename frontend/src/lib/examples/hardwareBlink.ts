@@ -5,6 +5,7 @@ export const hardwareBlink: ExampleNugget = {
   name: 'Blinky Board',
   description: 'Make the LED on your ESP32 blink on and off. Your first hardware nugget!',
   category: 'hardware',
+  difficulty: 1,
   color: 'bg-green-100',
   accentColor: 'text-green-700',
   workspace: {

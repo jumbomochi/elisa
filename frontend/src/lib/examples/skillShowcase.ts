@@ -5,6 +5,7 @@ export const skillShowcase: ExampleNugget = {
   name: 'Skill Showcase',
   description: 'Demonstrates skills, rules, and composite skill flows. Builds a themed landing page with code quality rules.',
   category: 'web',
+  difficulty: 2,
   color: 'bg-purple-100',
   accentColor: 'text-purple-700',
   workspace: {

@@ -5,6 +5,7 @@ export const simpleWebApp: ExampleNugget = {
   name: 'My First Website',
   description: 'A click counter with a big button and animated number. Deploys to the web.',
   category: 'web',
+  difficulty: 1,
   color: 'bg-blue-100',
   accentColor: 'text-blue-700',
   workspace: {

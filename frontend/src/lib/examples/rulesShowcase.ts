@@ -5,6 +5,7 @@ export const rulesShowcase: ExampleNugget = {
   name: 'Rules Showcase',
   description: 'Demonstrates all four rule triggers: always, on_task_complete, on_test_fail, and before_deploy. Builds a portfolio page with quality gates.',
   category: 'web',
+  difficulty: 2,
   color: 'bg-indigo-100',
   accentColor: 'text-indigo-700',
   workspace: {
