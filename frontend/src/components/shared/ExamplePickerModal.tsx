@@ -1,5 +1,20 @@
 import type { ExampleNugget } from '../../lib/examples';
 
+function DifficultyStars({ level }: { level: 1 | 2 | 3 }) {
+  return (
+    <span className="flex gap-0.5" aria-label={`Difficulty ${level} of 3`}>
+      {[1, 2, 3].map((star) => (
+        <span
+          key={star}
+          className={`text-xs ${star <= level ? 'text-accent-gold' : 'text-atelier-text-muted/30'}`}
+        >
+          ★
+        </span>
+      ))}
+    </span>
+  );
+}
+
 interface Props {
   examples: ExampleNugget[];
   onSelect: (example: ExampleNugget) => void;
@@ -25,8 +40,8 @@ export default function ExamplePickerModal({ examples, onSelect, onClose }: Prop
     <div className="fixed inset-0 z-50 flex items-center justify-center modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="examples-modal-title">
       <div className="glass-elevated rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[80vh] flex flex-col animate-float-in">
         <div className="px-6 py-5 border-b border-border-subtle">
-          <h2 id="examples-modal-title" className="text-xl font-display font-bold text-atelier-text">Choose a Nugget to Explore</h2>
-          <p className="text-sm text-atelier-text-muted mt-1">Pick an example to see how it works, or start from scratch.</p>
+          <h2 id="examples-modal-title" className="text-xl font-display font-bold text-atelier-text">Pick a Mission!</h2>
+          <p className="text-sm text-atelier-text-muted mt-1">Choose a project to build — you can customize it before launching!</p>
         </div>
 
         <div className="flex-1 overflow-y-auto p-6">
@@ -36,12 +51,20 @@ export default function ExamplePickerModal({ examples, onSelect, onClose }: Prop
                 key={example.id}
                 data-testid={`example-card-${example.id}`}
                 onClick={() => onSelect(example)}
-                className="bg-atelier-surface/70 rounded-xl p-4 text-left hover:bg-atelier-elevated border border-border-subtle hover:border-border-medium transition-all cursor-pointer group"
+                className="bg-atelier-surface/70 rounded-xl p-5 text-left hover:bg-atelier-elevated border border-border-subtle hover:border-border-medium transition-all cursor-pointer group"
               >
-                <div className="flex items-center gap-2 mb-2">
+                {example.previewImage && (
+                  <div className="w-full h-24 rounded-lg mb-3 overflow-hidden bg-atelier-base/50">
+                    <img src={example.previewImage} alt={example.name} className="w-full h-full object-cover" />
+                  </div>
+                )}
+                <div className="flex items-center justify-between mb-1">
                   <h3 className="font-display font-semibold text-atelier-text group-hover:text-accent-gold transition-colors">
                     {example.name}
                   </h3>
+                  <DifficultyStars level={example.difficulty} />
+                </div>
+                <div className="flex items-center gap-2 mb-2">
                   <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${CATEGORY_COLORS[example.category]}`}>
                     {CATEGORY_LABELS[example.category]}
                   </span>
