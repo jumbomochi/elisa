@@ -36,6 +36,8 @@ const CATEGORY_COLORS: Record<ExampleNugget['category'], string> = {
 };
 
 export default function ExamplePickerModal({ examples, onSelect, onClose }: Props) {
+  const sortedExamples = [...examples].sort((a, b) => a.difficulty - b.difficulty);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="examples-modal-title">
       <div className="glass-elevated rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[80vh] flex flex-col animate-float-in">
@@ -46,7 +48,7 @@ export default function ExamplePickerModal({ examples, onSelect, onClose }: Prop
 
         <div className="flex-1 overflow-y-auto p-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {examples.map((example) => (
+            {sortedExamples.map((example) => (
               <button
                 key={example.id}
                 data-testid={`example-card-${example.id}`}
