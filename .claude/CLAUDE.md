@@ -39,9 +39,13 @@ Do NOT update docs for internal implementation changes that don't affect the str
 
 ## Environment Variables
 
-- `ANTHROPIC_API_KEY` -- Required for Claude API/SDK access
+- `LLM_PROVIDER` -- Select LLM backend: `anthropic` (default), `gemini`, or `ollama`
+- `ANTHROPIC_API_KEY` -- Required for Claude API/SDK access (when using `anthropic` provider)
 - `CLAUDE_MODEL` -- Override agent model (default: `claude-opus-4-6`)
 - `NARRATOR_MODEL` -- Override narrator model (default: `claude-haiku-4-5-20241022`)
+- `GEMINI_API_KEY` -- Required when using `gemini` provider
+- `GEMINI_MODEL` -- Override Gemini agent model (default: `gemini-2.5-flash`)
+- `GEMINI_CHAT_MODEL` -- Override Gemini narrator model (default: `gemini-2.0-flash`)
 - `CORS_ORIGIN` -- Override CORS origin in dev mode (default: `http://localhost:5173`)
 - `PORT` -- Backend port (default: 8000)
 

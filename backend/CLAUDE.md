@@ -115,8 +115,11 @@ src/
 
 ## Configuration
 
+- `LLM_PROVIDER`: Select LLM backend — `anthropic` (default), `gemini`, or `ollama`
 - `PORT`: Backend port (default 8000), or Electron picks a free port
 - `CORS_ORIGIN`: Override CORS origin in dev mode (default `http://localhost:5173`)
+- `ANTHROPIC_API_KEY`: Required for Claude API/SDK access (anthropic provider)
 - `CLAUDE_MODEL`: Override model for agents and teaching engine (default `claude-opus-4-6`)
-- `ANTHROPIC_API_KEY`: Required for Claude API/SDK access
-- Claude models: configurable via `CLAUDE_MODEL` env var (default claude-opus-4-6)
+- `GEMINI_API_KEY`: Required for Gemini API access (gemini provider)
+- `GEMINI_MODEL`: Override Gemini code model (default `gemini-2.5-flash`)
+- `GEMINI_CHAT_MODEL`: Override Gemini chat model (default `gemini-2.0-flash`)

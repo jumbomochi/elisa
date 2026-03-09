@@ -61,3 +61,14 @@ export const OLLAMA_TOOL_OUTPUT_CAP = 10_000;
 
 /** Bash command timeout for Ollama tool executor in milliseconds. */
 export const OLLAMA_BASH_TIMEOUT_MS = 30_000;
+
+// -- Gemini defaults --
+
+/** Default Gemini OpenAI-compatible API URL. */
+export const DEFAULT_GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/openai/';
+
+/** Default Gemini model for code generation / planning. */
+export const DEFAULT_GEMINI_CODE_MODEL = 'gemini-2.5-flash';
+
+/** Default Gemini model for narrator / teaching (lighter). */
+export const DEFAULT_GEMINI_CHAT_MODEL = 'gemini-2.0-flash';
